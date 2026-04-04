@@ -3,13 +3,33 @@ import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 dotenv.config();
+console.log("🔥 CORRECT SERVER FILE RUNNING");
 const app = express();
 
 // ✅ Middleware
 app.use(cors());
 app.use(express.json());
 
-// 🔥 Shopify Config (DO NOT hardcode in production)
+
+// 🔥 Conversation Logging Layer
+const conversations = [];
+
+function logConversation({ message, email, intent, reply }) {
+  const entry = {
+    message,
+    email: email || null,
+    intent,
+    reply,
+    timestamp: new Date().toISOString()
+  };
+
+  conversations.push(entry);
+
+  console.log("📊 Conversation Logged:", entry);
+}
+
+
+// 🔥 Shopify Config
 const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 const SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN;
 
@@ -19,7 +39,7 @@ const FAQs = [
   { q: "return", a: "Returns accepted within 14 days." }
 ];
 
-// 🔥 Improved Intent detection (UPDATED)
+// 🔥 Intent detection
 function detectIntent(message) {
   const msg = message.toLowerCase();
 
@@ -57,7 +77,14 @@ async function getOrderByEmail(email) {
       }
     );
 
-    return res.data.orders?.[0] || null;
+    const orders = res.data.orders;
+
+    if (!orders || orders.length === 0) return null;
+
+    return orders.sort(
+      (a, b) => new Date(b.created_at) - new Date(a.created_at)
+    )[0];
+
   } catch (error) {
     console.error("Shopify error:", error.response?.data || error.message);
     return null;
@@ -73,30 +100,37 @@ app.post("/chat", async (req, res) => {
     const { message, email } = req.body;
 
     if (!message) {
-      return res.status(400).json({ reply: "Message is required." });
+      const reply = "Message is required.";
+
+      logConversation({ message, email, intent: "validation_error", reply });
+
+      return res.status(400).json({ reply });
     }
 
     const lowerMessage = message.toLowerCase();
 
-    // ✅ Step 1: FAQ
+    // ✅ FAQ
     const match = FAQs.find(f => lowerMessage.includes(f.q));
     if (match) {
-      console.log("FAQ matched");
-      return res.json({ reply: match.a });
+      const reply = match.a;
+
+      logConversation({ message, email, intent: "faq", reply });
+
+      return res.json({ reply });
     }
 
-    // ✅ Step 2: Intent system
+    // ✅ Intent
     const intent = detectIntent(message);
-    console.log("DETECTED INTENT:", intent); // 🔥 Debugging
+    console.log("DETECTED INTENT:", intent);
 
     switch (intent) {
       case "order_status":
-        console.log("Order flow triggered");
-
         if (!email) {
-          return res.json({
-            reply: "Please provide your email to check your order."
-          });
+          const reply = "Please provide your email to check your order.";
+
+          logConversation({ message, email, intent, reply });
+
+          return res.json({ reply });
         }
 
         const order = await getOrderByEmail(email);
@@ -105,44 +139,68 @@ app.post("/chat", async (req, res) => {
           const tracking =
             order.fulfillments?.[0]?.tracking_number || "Not available yet";
 
-          return res.json({
-            reply: `Here’s your order update:
+          const reply = `Here’s your order update:
 
 • Status: ${order.fulfillment_status || "Processing"}
 • Payment: ${order.financial_status}
-• Tracking: ${tracking}
+• Tracking: ${tracking}`;
 
-If you need anything else, I can help.`
-          });
+          logConversation({ message, email, intent, reply });
+
+          return res.json({ reply });
         } else {
-          return res.json({
-            reply: "No order found for this email."
-          });
+          const reply = "No order found for this email.";
+
+          logConversation({ message, email, intent, reply });
+
+          return res.json({ reply });
         }
 
       case "refund":
-        return res.json({
-          reply: "Refunds are processed within 5–7 business days."
-        });
+        const refundReply = "Refunds are processed within 5–7 business days.";
+
+        logConversation({ message, email, intent, reply: refundReply });
+
+        return res.json({ reply: refundReply });
 
       case "shipping":
-        return res.json({
-          reply: "Shipping takes 3–5 business days."
-        });
+        const shippingReply = "Shipping takes 3–5 business days.";
+
+        logConversation({ message, email, intent, reply: shippingReply });
+
+        return res.json({ reply: shippingReply });
 
       default:
-        console.log("Fallback triggered");
+        const fallbackReply =
+          "I’m not sure. Let me connect you to a support agent.";
 
-        return res.json({
-          reply:
-            "I’m not sure. Let me connect you to a support agent."
-        });
+        logConversation({ message, email, intent, reply: fallbackReply });
+
+        return res.json({ reply: fallbackReply });
     }
 
   } catch (err) {
     console.error("Route error:", err);
-    return res.status(500).json({ reply: "Server error" });
+
+    const reply = "Server error";
+
+    logConversation({
+      message: req.body?.message,
+      email: req.body?.email,
+      intent: "error",
+      reply
+    });
+
+    return res.status(500).json({ reply });
   }
+});
+
+// 🔥 Logs endpoint
+app.get("/logs", (req, res) => {
+  res.json({
+    total: conversations.length,
+    conversations
+  });
 });
 
 // 🔥 Health check
