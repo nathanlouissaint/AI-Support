@@ -1,83 +1,111 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>AI Support</title>
+  <meta charset="UTF-8" />
+  <title>AI Support Chat</title>
 
   <style>
     body {
       font-family: Arial, sans-serif;
-      padding: 40px;
-      background: #f5f5f5;
+      background: #0f172a;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
     }
 
-    .container {
-      max-width: 400px;
-      margin: auto;
-      background: white;
-      padding: 20px;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    .chat-container {
+      width: 400px;
+      height: 600px;
+      background: #1e293b;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
     }
 
-    input, button {
-      width: 100%;
+    .messages {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    .message {
+      margin-bottom: 12px;
       padding: 10px;
-      margin-top: 10px;
-      border-radius: 5px;
-      border: 1px solid #ccc;
+      border-radius: 8px;
+      max-width: 75%;
+    }
+
+    .user {
+      background: #3b82f6;
+      align-self: flex-end;
+    }
+
+    .bot {
+      background: #334155;
+      align-self: flex-start;
+    }
+
+    .input-area {
+      display: flex;
+      border-top: 1px solid #475569;
+    }
+
+    input {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      outline: none;
+      background: #0f172a;
+      color: white;
     }
 
     button {
-      background: black;
-      color: white;
+      padding: 12px;
+      background: #22c55e;
+      border: none;
       cursor: pointer;
-    }
-
-    button:hover {
-      background: #333;
-    }
-
-    #response {
-      margin-top: 20px;
-      font-weight: bold;
-    }
-
-    #loading {
-      margin-top: 10px;
-      color: gray;
-      font-size: 14px;
     }
   </style>
 </head>
 
 <body>
-  <div class="container">
-    <h2>Support Chat</h2>
 
-    <input id="message" placeholder="Type your message..." />
-    <input id="email" placeholder="Your email (optional)" />
+  <div class="chat-container">
+    <div class="messages" id="messages"></div>
 
-    <button onclick="sendMessage()">Send</button>
-
-    <div id="loading"></div>
-    <p id="response"></p>
+    <div class="input-area">
+      <input id="input" placeholder="Type your message..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
   </div>
 
   <script>
+    const messagesDiv = document.getElementById("messages");
+
+    function addMessage(text, sender) {
+      const div = document.createElement("div");
+      div.classList.add("message", sender);
+      div.innerText = text;
+      messagesDiv.appendChild(div);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      return div;
+    }
+
     async function sendMessage() {
-      const message = document.getElementById("message").value;
-      const email = document.getElementById("email").value;
+      const input = document.getElementById("input");
+      const message = input.value;
 
-      const responseEl = document.getElementById("response");
-      const loadingEl = document.getElementById("loading");
+      if (!message) return;
 
-      if (!message) {
-        responseEl.innerText = "Please enter a message.";
-        return;
-      }
+      // Show user message
+      addMessage(message, "user");
+      input.value = "";
 
-      loadingEl.innerText = "Thinking...";
-      responseEl.innerText = "";
+      // Show loading state
+      const loadingMessage = addMessage("Typing...", "bot");
 
       try {
         const res = await fetch("http://127.0.0.1:8000/chat", {
@@ -85,19 +113,30 @@
           headers: {
             "Content-Type": "application/json"
           },
-          body: JSON.stringify({ message, email })
+          body: JSON.stringify({
+            message,
+            email: "test@example.com"
+          })
         });
 
         const data = await res.json();
 
-        responseEl.innerText = data.reply;
+        // Replace loading message with actual response
+        loadingMessage.innerText = data.data.response;
+
       } catch (err) {
-        responseEl.innerText = "Error connecting to server.";
+        loadingMessage.innerText = "Connection failed. Try again.";
         console.error(err);
       }
-
-      loadingEl.innerText = "";
     }
+
+    // Enter key support
+    document.getElementById("input").addEventListener("keypress", function(e) {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    });
   </script>
+
 </body>
 </html>
