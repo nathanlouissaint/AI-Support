@@ -1,151 +1,140 @@
-document.addEventListener("DOMContentLoaded", function () {
-
-  // Create toggle button
-  const button = document.createElement("div");
-  button.innerText = "Chat";
-  button.style.position = "fixed";
-  button.style.bottom = "20px";
-  button.style.right = "20px";
-  button.style.background = "#22c55e";
-  button.style.color = "white";
-  button.style.padding = "12px 16px";
-  button.style.borderRadius = "999px";
-  button.style.cursor = "pointer";
-  button.style.fontWeight = "600";
-  button.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
-  button.style.zIndex = "9999";
-
-  document.body.appendChild(button);
-
-  // Create chat container
+(function () {
+  // 🔴 Create container
   const container = document.createElement("div");
-  container.style.position = "fixed";
-  container.style.bottom = "70px";
-  container.style.right = "20px";
-  container.style.width = "360px";
-  container.style.height = "520px";
-  container.style.background = "#1e293b";
-  container.style.borderRadius = "16px";
-  container.style.display = "flex";
-  container.style.flexDirection = "column";
-  container.style.overflow = "hidden";
-  container.style.fontFamily = "Arial, sans-serif";
-  container.style.color = "white";
-  container.style.boxShadow = "0 10px 30px rgba(0,0,0,0.4)";
-  container.style.zIndex = "9999";
-
-  // Animation initial state
-  container.style.opacity = "0";
-  container.style.transform = "translateY(20px)";
-  container.style.pointerEvents = "none";
-  container.style.transition = "all 0.3s ease";
+  container.id = "ai-widget-container";
 
   container.innerHTML = `
-    <div style="
-      padding: 14px 16px;
-      background: #0f172a;
-      font-weight: 600;
-      font-size: 14px;
-      border-bottom: 1px solid #334155;
-    ">
-      Support
-    </div>
+    <div id="ai-widget-button">Chat</div>
 
-    <div id="messages" style="
-      flex:1;
-      padding:16px;
-      overflow:auto;
-      display:flex;
-      flex-direction:column;
-    "></div>
+    <div id="ai-widget-box">
+      <div id="ai-chat"></div>
 
-    <div style="
-      display:flex;
-      padding:10px;
-      border-top:1px solid #334155;
-      gap:8px;
-    ">
-      <input id="input" placeholder="Type your message..." style="
-        flex:1;
-        padding:10px 12px;
-        background:#0f172a;
-        color:white;
-        border:none;
-        border-radius:8px;
-        outline:none;
-        font-size:14px;
-      " />
-      <button id="send" style="
-        padding:10px 14px;
-        background:#22c55e;
-        border:none;
-        border-radius:8px;
-        font-weight:600;
-        cursor:pointer;
-      ">
-        Send
-      </button>
+      <div id="ai-input-area">
+        <input id="ai-input" placeholder="Type a message..." />
+        <button id="ai-send">Send</button>
+      </div>
     </div>
   `;
 
   document.body.appendChild(container);
 
-  // Toggle logic with animation
+  // 🔴 Styles
+  const style = document.createElement("style");
+  style.innerHTML = `
+    #ai-widget-button {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: black;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 20px;
+      cursor: pointer;
+      z-index: 9999;
+    }
+
+    #ai-widget-box {
+      position: fixed;
+      bottom: 70px;
+      right: 20px;
+      width: 300px;
+      height: 400px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      display: none;
+      flex-direction: column;
+      z-index: 9999;
+    }
+
+    #ai-chat {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      font-family: Arial;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ai-msg {
+      margin: 6px 0;
+      padding: 8px;
+      border-radius: 8px;
+      max-width: 70%;
+      font-size: 14px;
+    }
+
+    .user {
+      background: black;
+      color: white;
+      align-self: flex-end;
+    }
+
+    .bot {
+      background: #eee;
+      align-self: flex-start;
+    }
+
+    #ai-input-area {
+      display: flex;
+      width: 100%;
+      border-top: 1px solid #ccc;
+    }
+
+    #ai-input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      padding: 10px;
+      outline: none;
+    }
+
+    #ai-send {
+      width: 70px;
+      background: black;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+  `;
+  document.head.appendChild(style);
+
+  // 🔴 Elements
+  const button = document.getElementById("ai-widget-button");
+  const box = document.getElementById("ai-widget-box");
+  const chat = document.getElementById("ai-chat");
+  const input = document.getElementById("ai-input");
+  const send = document.getElementById("ai-send");
+
+  const email = "guest@site.com";
+
+  // 🔴 Toggle logic (clean)
   let isOpen = false;
 
   button.onclick = () => {
     isOpen = !isOpen;
-
-    if (isOpen) {
-      container.style.opacity = "1";
-      container.style.transform = "translateY(0)";
-      container.style.pointerEvents = "auto";
-    } else {
-      container.style.opacity = "0";
-      container.style.transform = "translateY(20px)";
-      container.style.pointerEvents = "none";
-    }
+    box.style.display = isOpen ? "flex" : "none";
   };
 
-  const messagesDiv = container.querySelector("#messages");
-  const input = container.querySelector("#input");
-  const sendBtn = container.querySelector("#send");
-
-  function addMessage(text, sender) {
+  // 🔴 Add message
+  function addMessage(text, type) {
     const div = document.createElement("div");
-
-    div.style.marginBottom = "12px";
-    div.style.padding = "10px 12px";
-    div.style.borderRadius = "12px";
-    div.style.maxWidth = "75%";
-    div.style.fontSize = "14px";
-    div.style.lineHeight = "1.4";
-
-    if (sender === "user") {
-      div.style.background = "#3b82f6";
-      div.style.alignSelf = "flex-end";
-    } else {
-      div.style.background = "#334155";
-      div.style.alignSelf = "flex-start";
-    }
-
+    div.className = `ai-msg ${type}`;
     div.innerText = text;
-    messagesDiv.appendChild(div);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-
-    return div;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
   }
 
+  // 🔴 Initial bot greeting
+  addMessage("Hi — how can I help you today?", "bot");
+
+  // 🔴 Send message
   async function sendMessage() {
     const message = input.value;
     if (!message) return;
 
     addMessage(message, "user");
     input.value = "";
-
-    sendBtn.disabled = true;
-
-    const loading = addMessage("Typing...", "bot");
 
     try {
       const res = await fetch("http://127.0.0.1:8000/chat", {
@@ -155,21 +144,28 @@ document.addEventListener("DOMContentLoaded", function () {
         },
         body: JSON.stringify({
           message,
-          email: "test@example.com"
+          email
         })
       });
 
       const data = await res.json();
-      loading.innerText = data.data.response;
+
+      addMessage(data.data.response, "bot");
 
     } catch (err) {
-      loading.innerText = "Connection failed. Try again.";
+      addMessage("Error connecting to support.", "bot");
       console.error(err);
     }
-
-    sendBtn.disabled = false;
   }
 
-  sendBtn.onclick = sendMessage;
+  // 🔴 Click send
+  send.onclick = sendMessage;
 
-});
+  // 🔴 Press Enter to send
+  input.addEventListener("keypress", function (e) {
+    if (e.key === "Enter") {
+      sendMessage();
+    }
+  });
+
+})();

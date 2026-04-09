@@ -1,35 +1,37 @@
-export default function detectIntent(message) {
-  const msg = message.toLowerCase();
+import client from "./openaiService.js";
 
-  // Order tracking
-  if (
-    msg.includes("order") ||
-    msg.includes("where is") ||
-    msg.includes("track") ||
-    msg.includes("package") ||
-    msg.includes("delivery") ||
-    msg.includes("shipped")
-  ) {
-    return "order_tracking";
-  }
+export default async function detectIntent(message) {
+  const completion = await client.chat.completions.create({
+    model: "openrouter/free",
+    messages: [
+      {
+        role: "system",
+        content: `
+Classify this Shopify support message.
 
-  // Refund / returns
-  if (
-    msg.includes("refund") ||
-    msg.includes("return") ||
-    msg.includes("money back")
-  ) {
-    return "refund_status";
-  }
+Return ONLY one:
+order_tracking
+refund_status
+faq_shipping
+fallback
+        `.trim()
+      },
+      {
+        role: "user",
+        content: message
+      }
+    ],
+    temperature: 0
+  });
 
-  // Shipping
-  if (
-    msg.includes("shipping") ||
-    msg.includes("how long")
-  ) {
-    return "faq_shipping";
-  }
+  const text = completion.choices?.[0]?.message?.content?.trim();
 
-  // Default fallback
-  return "fallback";
+  const allowed = [
+    "order_tracking",
+    "refund_status",
+    "faq_shipping",
+    "fallback"
+  ];
+
+  return allowed.includes(text) ? text : "fallback";
 }

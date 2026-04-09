@@ -1,21 +1,66 @@
-const conversations = [];
+import { query } from "../config/db.js";
 
-export const saveConversation = ({ email, message, response }) => {
+// 🔴 SAVE CONVERSATION (DB)
+export const saveConversation = async ({
+  email,
+  message,
+  response,
+  intent,
+  data
+}) => {
+  const result = await query(
+    `
+    INSERT INTO conversations (email, message, response, intent, data)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING id
+    `,
+    [
+      email || null,
+      message,
+      response,
+      intent,
+      JSON.stringify(data || {})
+    ]
+  );
+
   const record = {
-    id: Date.now(),
-    email: email || null,
+    id: result.rows[0].id,
+    email,
     message,
     response,
+    intent,
+    data,
     createdAt: new Date()
   };
 
-  conversations.push(record);
-
-  console.log("Saved Conversation:", record); // visibility
+  console.log("🧠 Saved Conversation:", record);
 
   return record;
 };
 
-export const getConversations = () => {
-  return conversations;
+// 🔴 GET RECENT CONVERSATIONS (FOR MEMORY)
+export const getRecentConversations = async (email) => {
+  if (!email) return [];
+
+  const result = await query(
+    `
+    SELECT message, response
+    FROM conversations
+    WHERE email = $1
+    ORDER BY created_at DESC
+    LIMIT 3
+    `,
+    [email]
+  );
+
+  return result.rows;
+};
+
+// 🔴 OPTIONAL: GET ALL (DEBUG ONLY)
+export const getConversations = async () => {
+  const result = await query(
+    `SELECT * FROM conversations ORDER BY created_at DESC`
+  );
+
+  return result.rows;
 };
