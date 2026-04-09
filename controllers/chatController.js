@@ -1,118 +1,175 @@
 import detectIntent from "../services/intentService.js";
 import generateResponse from "../services/responseService.js";
 import { getOrderStatus } from "../services/orderService.js";
-import { 
-  saveConversation, 
-  getRecentConversations 
+import {
+  saveConversation,
+  getRecentConversations
 } from "../services/conversationService.js";
 
 export async function handleChat(req, res) {
+  const startTime = Date.now();
+
   try {
-    console.log("✅ Controller hit");
+    console.log("🚀 Chat request received");
 
     const { message, email } = req.body;
-    console.log("📩 Message:", message);
 
-    // Validation
-    if (!message) {
+    // ======================
+    // VALIDATION
+    // ======================
+    if (!message || typeof message !== "string") {
+      console.warn("❌ Invalid message input");
       return res.status(400).json({
         success: false,
         data: null,
-        error: "Message is required"
+        error: "Valid message is required"
       });
     }
 
-    const lowerMessage = message.toLowerCase();
+    const cleanMessage = message.trim();
+    const lowerMessage = cleanMessage.toLowerCase();
 
-    // 🔴 INTENT DETECTION
-    console.log("➡️ Running intent detection...");
+    console.log("📩 Message:", cleanMessage);
+    console.log("👤 Email:", email || "anonymous");
+
+    // ======================
+    // INTENT DETECTION
+    // ======================
     let intent = "fallback";
 
     try {
-      intent = await detectIntent(message);
+      console.log("🧠 Running intent detection...");
+      intent = await detectIntent(cleanMessage);
+
+      if (!intent || typeof intent !== "string") {
+        console.warn("⚠️ Invalid intent returned, forcing fallback");
+        intent = "fallback";
+      }
     } catch (error) {
       console.error("❌ Intent detection failed:", error.message);
     }
 
     console.log("🎯 Intent:", intent);
 
+    // ======================
+    // BUSINESS LOGIC (ORDER)
+    // ======================
     let data = {};
 
-    // Order tracking logic
     if (intent === "order_tracking") {
       try {
-        console.log("📦 Fetching order...");
-        data = getOrderStatus(email);
-        console.log("📦 Order data:", data);
+        console.log("📦 Fetching order data...");
+        data = await getOrderStatus(email);
+
+        if (!data) {
+          console.warn("⚠️ No order data found");
+          data = {};
+        }
       } catch (error) {
         console.error("❌ Order fetch failed:", error.message);
       }
     }
 
-    // 🔴 FETCH MEMORY (CRITICAL)
+    // ======================
+    // FETCH MEMORY
+    // ======================
     let history = [];
 
     try {
+      console.log("📚 Fetching conversation history...");
       history = await getRecentConversations(email);
-      console.log("📚 History:", history);
+
+      if (!Array.isArray(history)) {
+        console.warn("⚠️ History is not an array, resetting");
+        history = [];
+      }
     } catch (error) {
       console.error("❌ Failed to fetch history:", error.message);
     }
 
-    // 🔴 AI RESPONSE WITH MEMORY
-    console.log("💬 Generating response...");
-    let responseText = "I'm not sure. Let me connect you to support.";
+    // ======================
+    // AI RESPONSE
+    // ======================
+    let responseText = null;
 
     try {
+      console.log("🤖 Generating AI response...");
       responseText = await generateResponse({
         intent,
-        message,
+        message: cleanMessage,
         data,
         history
       });
+
+      if (!responseText || typeof responseText !== "string") {
+        console.warn("⚠️ Invalid AI response, using fallback");
+        responseText = null;
+      }
+
     } catch (error) {
       console.error("❌ Response generation failed:", error.message);
     }
 
-    // 🔴 SAVE CONVERSATION (await required for DB)
+    // HARD FALLBACK (ONLY if AI truly failed)
+    if (!responseText) {
+      responseText =
+        "I'm having trouble processing that right now. Let me connect you to support.";
+      intent = "fallback";
+    }
+
+    // ======================
+    // SAVE CONVERSATION
+    // ======================
     let conversationId = null;
 
     try {
+      console.log("💾 Saving conversation...");
       const conversation = await saveConversation({
         email,
-        message,
+        message: cleanMessage,
         response: responseText,
         intent,
         data
       });
 
-      conversationId = conversation?.id;
-      console.log("🧠 Conversation saved:", conversationId);
+      conversationId = conversation?.id || null;
     } catch (error) {
       console.error("❌ Conversation save failed:", error.message);
     }
 
-    console.log("✅ Sending response");
+    // ======================
+    // HUMAN ESCALATION LOGIC
+    // ======================
+    const requiresHuman =
+      intent === "fallback" ||
+      lowerMessage.includes("refund") ||
+      lowerMessage.includes("angry") ||
+      lowerMessage.includes("this is ridiculous") ||
+      lowerMessage.includes("human") ||
+      lowerMessage.includes("agent");
 
-    res.json({
+    // ======================
+    // RESPONSE
+    // ======================
+    const duration = Date.now() - startTime;
+
+    console.log(`✅ Response sent in ${duration}ms`);
+
+    return res.json({
       success: true,
       data: {
         intent,
         response: responseText,
-        requires_human:
-          intent === "fallback" ||
-          lowerMessage.includes("refund now") ||
-          lowerMessage.includes("this is ridiculous") ||
-          lowerMessage.includes("angry"),
+        requires_human: requiresHuman,
         conversationId
       },
       error: null
     });
 
   } catch (err) {
-    console.error("🔥 CONTROLLER ERROR:", err);
+    console.error("🔥 CONTROLLER CRASH:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       data: null,
       error: "Internal server error"
